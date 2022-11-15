@@ -1,0 +1,4 @@
+name: 'Secure SRT321 Thermostat'
+packageKey: 'secure_srt321_thermostat'
+permissions:
+  zwave: {}
