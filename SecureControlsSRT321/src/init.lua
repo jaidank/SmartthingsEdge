@@ -25,7 +25,7 @@ local ZwaveDriver = require "st.zwave.driver"
 --- @type st.zwave.CommandClass.Basic
 local Basic = (require "st.zwave.CommandClass.Basic")({ version = 1 })
 --- @type st.zwave.CommandClass.SensorMultilevel
-local SensorMultilevel = (require "st.zwave.CommandClass.SensorMultilevel")({ version = 5 })
+local SensorMultilevel = (require "st.zwave.CommandClass.SensorMultilevel")({ version = 1 }) -- was v5
 --- @type st.zwave.CommandClass.ThermostatSetpoint
 local ThermostatSetpoint = (require "st.zwave.CommandClass.ThermostatSetpoint")({ version = 1 })
 --- @type st.zwave.CommandClass.Association
@@ -43,10 +43,13 @@ local Configuration = (require "st.zwave.CommandClass.Configuration")({version=1
 local log = require "log"
 
 local constants = (require "st.zwave.constants")
-local DEVICE_WAKEUP_INTERVAL = 10 * 60
+local TEMPERATURE = "temperature"
+local DEVICE_WAKEUP_INTERVAL = 15 * 60 -- 15 minutes
 local LATEST_BATTERY_REPORT_TIMESTAMP = "latest_battery_report_timestamp"
 local CACHED_SETPOINT = "cached_setpoint"
-local GET_TEMPERATURE = 1 -- Get Temperature first and every other Wake Up
+local TEMP_POLLING_INTERVAL = 8 -- Request Temperature every 8 wakeup by default
+local GET_TEMPERATURE = 8 -- Get Temperature at early wake-up
+local GET_BATTERY = 12 -- Get Battery third and every 24th Wake Up
 local SET_ASSOCIATION = 1 -- Set Association (setpoint and temperature) first Wake Up
 local BATTERY_REPORT_INTERVAL_SEC = 3 * 60 * 60  -- every 3 hours (was once a day)
 local DELAY_TO_GET_UPDATED_VALUE = 1
@@ -80,46 +83,6 @@ local function adjust_temperature_if_exceeded_min_max_limit (degree, scale)
         return utils.clamp_value(degree, CLAMP.CELSIUS_MIN, CLAMP.CELSIUS_MAX)
     else
         return utils.clamp_value(degree, CLAMP.FAHRENHEIT_MIN, CLAMP.FAHRENHEIT_MAX)
-    end
-end
-
-local function seconds_since_latest_battery_report(device)
-    local last_time = device:get_field(LATEST_BATTERY_REPORT_TIMESTAMP)
-    if last_time ~= nil then
-        return os.difftime(os.time(), last_time)
-    end
-    return BATTERY_REPORT_INTERVAL_SEC + 100
-end
-
-local function check_and_send_battery_get(device)
-    -- log.info("check_and_send_battery_get")
-    -- Check if time to request new battery report. one time a day
-    if seconds_since_latest_battery_report(device) > BATTERY_REPORT_INTERVAL_SEC then
-        device:send(Battery:Get({}))
-    end
-end
-
-local function send_temperature_get(device)
-    -- log.info("send_temperature_get", GET_TEMPERATURE)
-    if GET_TEMPERATURE == 1 then
-        device:send(SensorMultilevel:Get({}))
-        GET_TEMPERATURE = 0
-    else
-        -- device:send(ThermostatSetpoint:Get({}))
-        GET_TEMPERATURE = 1   -- get temperature next wakeup
-    end
-end
-
-local function send_setpoint_and_temperature_association(device)
-    if SET_ASSOCIATION == 1 then
-        -- log.info("send_setpoint_and_temperature_association: about to Set")
-        local hubnode = device.driver.environment_info.hub_zwave_id
-        device:send(Association:Set({grouping_identifier = 4, node_ids = {hubnode}}))
-        device:send(Association:Get({grouping_identifier = 4}))
-        device:send(Association:Set({grouping_identifier = 5, node_ids = {hubnode}}))
-        device:send(Association:Get({grouping_identifier = 5}))
-        SET_ASSOCIATION = 0
-        -- log.info("send_setpoint_and_temperature_association: Set done")
     end
 end
 
@@ -200,22 +163,27 @@ local function thermostat_mode_set_handler(self, device, cmd)
 end
 
 local function temperature_report_handler(self, device, cmd)
-  -- log.info("temperature_report_handler")
-  if (cmd.args.sensor_type == SensorMultilevel.sensor_type.TEMPERATURE) then
+  log.info("temperature_report_handler")
+  if (cmd.args.sensor_type == SensorMultilevel.sensor_type.TEMPERATURE) 
+  then
     local scale = 'C'
+    local sensor_value = cmd.args.sensor_value
     if (cmd.args.scale == SensorMultilevel.scale.temperature.FAHRENHEIT) then scale = 'F' end
-    device:emit_event_for_endpoint(cmd.src_channel, capabilities.temperatureMeasurement.temperature({value = cmd.args.sensor_value, unit = scale}))
-    device:set_field(TEMPERATURE, cmd.args.sensor_value, {persist = true})
+    log.info("temperature_report_handler cmd.src_channel: ", cmd.src_channel, " sensor_value: ", sensor_value)
+    device:emit_event_for_endpoint(cmd.src_channel, capabilities.temperatureMeasurement.temperature({value = sensor_value, unit = scale}))
+    log.info("temperature_report_handler set_field TEMPERATURE, sensor_value: >", sensor_value, "<")
+    device:set_field(TEMPERATURE, sensor_value, {persist = true})
   end
+  log.info("temperature_report_handler done")
 end
 
 local function association_report_handler(self, device, cmd)
-    -- log.info("association_report_handler: ", cmd)
+    log.info("association_report_handler: ", cmd)
 end
 
 local function battery_report_handler(self, device, cmd)
     local battery_level = cmd.args.battery_level
-    -- log.info("battery_report_handler: ", battery_level)
+    log.info("battery_report_handler: ", battery_level)
     if (battery_level == Battery.battery_level.BATTERY_LOW_WARNING) then
         battery_level = 2
     end
@@ -260,45 +228,126 @@ local function set_heating_setpoint(driver, device, command)
     device:set_field(CACHED_SETPOINT, setCommand)
 end
 
+-- wakeup handler does (only one at a time):
+--   associations (first wakeup only)
+--   cached setpoint (routine or interactive setpoint change)
+--   temperature request (every hour, approx)
+--   battery request (every 3 hours approx)
 local function wakeup_notification_handler(self, device, cmd)
-    -- log.info("wakeup_notification_handler")
-    send_setpoint_and_temperature_association(device)    -- first Wake Up only
-    check_and_send_cached_setpoint(device)
-    check_and_send_battery_get(device)                   -- 3h intervals
-    -- send_temperature_get(device)                      -- alternative Wake Ups
+	log.info("wakeup_notification_handler started")
+	
+	if SET_ASSOCIATION == 1							-- first Wake Up only
+	then
+		log.info("wakeup: send_setpoint_and_temperature_association")
+		local hubnode = device.driver.environment_info.hub_zwave_id
+		device:send(Association:Set({grouping_identifier = 4, node_ids = {hubnode}}))
+		-- device:send(Association:Get({grouping_identifier = 4}))
+		device:send(Association:Set({grouping_identifier = 5, node_ids = {hubnode}}))
+		-- device:send(Association:Get({grouping_identifier = 5}))
+		log.info("wakeup: send ThermostatSetpoint:Get")
+		device:send(ThermostatSetpoint:Get({setpoint_type = ThermostatSetpoint.setpoint_type.HEATING_1}))
+		log.info("wakeup: send Battery:Get")
+		device:send(Battery:Get({}))
+		SET_ASSOCIATION = 0
+		log.info("wakeup: associations and initial Setpoint and Battery gets done")
+	else
+		local cached_setpoint_command = device:get_field(CACHED_SETPOINT)
+		
+		if cached_setpoint_command ~= nil				-- when setpoint changed (routine or interactive)
+		then
+			log.info("wakeup: send_cached setpoint")
+			device:send(cached_setpoint_command)
+			local follow_up_poll = function()
+				device:send(ThermostatSetpoint:Get({setpoint_type = ThermostatSetpoint.setpoint_type.HEATING_1}))
+			end
+			device.thread:call_with_delay(DELAY_TO_GET_UPDATED_VALUE, follow_up_poll)
+			log.info("wakeup: cached setpoint sent")
+		else
+			if GET_TEMPERATURE >= TEMP_POLLING_INTERVAL 		-- every 4th wakeup
+			then
+				log.info("wakeup: send_temperature request")
+				device:send(SensorMultilevel:Get({}))
+				GET_TEMPERATURE = 0
+				log.info("wakeup: temperature request sent")
+			else
+				if GET_BATTERY >= 24				-- every 24th wakeup
+				then
+					log.info("wakeup: send_battery request")
+					device:send(Battery:Get({}))
+					GET_BATTERY = 0
+					log.info("wakeup: battery request sent")
+				else
+					log.info("wakeup: nothing to do")
+				end
+			end
+		end
+		GET_TEMPERATURE = GET_TEMPERATURE + 1
+		GET_BATTERY = GET_BATTERY + 1
+	end
+	log.info("wakeup_notification_handler complete")
 end
 
 local function update_preference(self, device, args)
-    if device.preferences.reportingInterval ~= nil and args.old_st_store.preferences.reportingInterval ~= device.preferences.reportingInterval then
+    if device.preferences.reportingInterval ~= nil and 
+	args.old_st_store.preferences.reportingInterval ~= device.preferences.reportingInterval 
+    then
+	log.info("preferences: send wakeup")
         device:send(WakeUp:IntervalSet({node_id = self.environment_info.hub_zwave_id, seconds = device.preferences.reportingInterval*60}))
+    end
+    if device.preferences.deltaT ~= nil and
+	args.old_st_store.preferences.deltaT ~= device.preferences.deltaT
+    then
+	log.info("preferences: send deltaT")
+	device:send(Configuration:Set({parameter_number = 3, size = 1, configuration_value = device.preferences.deltaT}))
+    end
+    if device.preferences.pollingInterval ~= nil and
+	args.old_st_store.preferences.pollingInterval ~= device.preferences.pollingInterval
+    then
+	log.info("preferences: set new pollingInterval here")
+	TEMP_POLLING_INTERVAL = device.preferences.pollingInterval
+	if GET_TEMPERATURE > TEMP_POLLING_INTERVAL
+	then
+	    GET_TEMPERATURE = TEMP_POLLING_INTERVAL
+	end
     end
 end
 
 local function device_init(self, device)
-    -- log.info("device_init")
+    log.info("device_init")
     device:set_update_preferences_fn(update_preference)
-    -- log.info("device_init - NO Association")
 end
 
 local function added_handler(self, device)
-    -- log.info("added_handler")
+    log.info("added_handler")
     -- initial capability value
-    device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint({value = 15.0, unit = 'C' }))
-    device:emit_event(capabilities.battery.battery(66))
-
-    local interval_min = 5
+    -- device:emit_event(capabilities.thermostatHeatingSetpoint.heatingSetpoint({value = 15.0, unit = 'C' }))
+    -- device:emit_event(capabilities.battery.battery(66))
+    -- initial reportingInterval
+    local interval_min = 15				-- 15 minutes
     if device.preferences.reportingInterval ~= nil then
         interval_min = device.preferences.reportingInterval
     end
     device:send(WakeUp:IntervalSet({node_id = self.environment_info.hub_zwave_id, seconds = interval_min*60}))
-
+	-- initial deltaT
+	local deltaT_min = 5				-- 0.5 degrees
+	if device.preferences.deltaT ~= nil then
+        deltaT_min = device.preferences.deltaT
+    end
+    device:send(Configuration:Set({parameter_number = 3, size = 1, configuration_value = deltaT_min}))
+	
     device:refresh()
 end
 
+local function driver_switched(self, device)
+    log.info("driver_switched")
+end
+
 local function do_refresh(self, device)
-    -- log.info("do_refresh")
+    log.info("do_refresh: battery_get")
     device:send(Battery:Get({}))
+    log.info("do_refresh: setpoint_get")
     device:send(ThermostatSetpoint:Get({setpoint_type = ThermostatSetpoint.setpoint_type.HEATING_1}))
+    log.info("do_refresh: done")
 end
 
 local secure_srt321_thermostat = {
@@ -334,6 +383,7 @@ local secure_srt321_thermostat = {
     lifecycle_handlers = {
         init = device_init,
         added = added_handler,
+	driverSwitched = driver_switched,
     },
     can_handle = can_handle_secure_srt321_thermostat
 }

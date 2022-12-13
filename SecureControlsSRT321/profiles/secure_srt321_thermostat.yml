@@ -24,3 +24,21 @@ preferences:
       minimum: 1
       maximum: 60
       default: 15
+  - name: "deltaT"
+    title: "temperature reporting delta"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 1
+      maximum: 20
+      default: 10
+  - name: "pollingInterval"
+    title: "polling Interval"
+    description: "temperature polling interval (in wakeups)"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 1
+      maximum: 96
+      default: 8
+    
