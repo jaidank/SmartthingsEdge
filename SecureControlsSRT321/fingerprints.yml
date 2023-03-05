@@ -5,3 +5,9 @@ zwaveManufacturer:
     productId: 0x0003
     productType: 0x0001
     deviceProfileName: secure_srt321_thermostat
+  - id: "Secure/srt321-5"
+    deviceLabel: Secure SRT321 Thermostat
+    manufacturerId: 0x0059
+    productId: 0x0005
+    productType: 0x0001
+    deviceProfileName: secure_srt321_thermostat
