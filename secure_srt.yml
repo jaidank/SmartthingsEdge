@@ -1,0 +1,110 @@
+name: secure_srt
+components:
+- id: main
+  capabilities:
+  - id: temperatureMeasurement
+    version: 1
+  - id: thermostatHeatingSetpoint
+    version: 1
+  - id: thermostatOperatingState
+    version: 1
+  - id: battery
+    version: 1
+  - id: refresh
+    version: 1
+  categories:
+  - name: Thermostat
+
+deviceConfig:
+  dashboard:
+    states:
+      - component: main
+        capability: temperatureMeasurement
+        version: 1
+        group: main
+        composite: true
+      - component: main
+        capability: thermostatOperatingState
+        version: 1
+        group: main
+        values:
+          - label: " {{thermostatOperatingState.value}}"
+            alternatives:
+              - key: "heating"
+                value: "⬤"
+                type: active
+              - key: "idle"
+                value: "◯"
+                type: inactive
+        composite: true
+      - component: main
+        capability: thermostatHeatingSetpoint
+        version: 1
+        group: main
+        values:
+          - label: " {{heatingSetpoint.value}} {{heatingSetpoint.unit}}"
+        composite: true
+    basicPlus: []
+  detailView:
+    - component: main
+      capability: battery
+      version: 1
+    - component: main
+      capability: temperatureMeasurement
+      version: 1
+    - component: main
+      capability: thermostatOperatingState
+      version: 1
+    - component: main
+      capability: thermostatHeatingSetpoint
+      version: 1
+    - component: main
+      capability: refresh
+      version: 1
+  automation:
+    conditions:
+      - component: main
+        capability: battery
+        version: 1
+      - component: main
+        capability: temperatureMeasurement
+        version: 1
+      - component: main
+        capability: thermostatOperatingState
+        version: 1
+      - component: main
+        capability: thermostatHeatingSetpoint
+        version: 1
+    actions:
+    - component: main
+      capability: thermostatHeatingSetpoint
+      version: 1
+
+preferences:
+  - name: "reportingInterval"
+    title: "reporting Interval"
+    description: "Device wakeup interval"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 1
+      maximum: 60
+      default: 15
+  - name: "deltaT"
+    title: "temperature reporting delta"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 1
+      maximum: 20
+      default: 10
+  - name: "pollingInterval"
+    title: "polling Interval"
+    description: "temperature polling interval (in wakeups)"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 1
+      maximum: 96
+      default: 8
+    

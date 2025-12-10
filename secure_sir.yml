@@ -1,0 +1,82 @@
+name: secure_sir
+components:
+- id: main
+  capabilities:
+  - id: switch
+    version: 1
+  - id: refresh
+    version: 1
+  categories:
+  - name: Switch
+- id: WaterTemperature
+  capabilities: 
+  - id: temperatureMeasurement
+    version: 1
+  categories:
+    - name: GenericSensor
+deviceConfig:
+  dashboard:
+    states:
+      - component: main
+        capability: switch
+        version: 1
+        group: main
+        composite: true
+      - component: WaterTemperature
+        capability: temperatureMeasurement
+        version: 1
+        group: main
+        values:
+          - label: " {{temperature.value}} {{temperature.unit}}" 
+        composite: true
+    actions: 
+      - component: main
+        capability: switch
+        version: 1
+        group: main
+        composite: true
+    basicPlus: []
+  detailView:
+    - component: main
+      capability: switch
+      version: 1
+    - component: WaterTemperature
+      capability: temperatureMeasurement
+      version: 1
+    - component: main
+      capability: refresh
+      version: 1 
+  automation:
+    conditions:
+      - component: main
+        capability: switch
+        version: 1
+      - component: WaterTemperature
+        capability: temperatureMeasurement
+        version: 1
+preferences:
+  - name: "reportingInterval"
+    title: "reporting Interval"
+    description: "Temperature reporting interval"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 60
+      maximum: 3660
+      default: 300
+  - name: "deltaT"
+    title: "Temperature reporting delta"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 2
+      maximum: 20
+      default: 5
+  - name: "temperatureCutoff"
+    title: "Temperature Cutoff"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 0
+      maximum: 1000
+      default: 0

@@ -1,0 +1,67 @@
+name: stellaz_trv
+components:
+- id: main
+  capabilities:
+  - id: temperatureMeasurement
+    version: 1
+  - id: thermostatMode
+    version: 1
+  - id: thermostatHeatingSetpoint
+    version: 1
+  - id: battery
+    version: 1
+  - id: refresh
+    version: 1
+  categories:
+  - name: Thermostat
+deviceConfig:
+  dashboard:
+    states:
+      - component: main
+        capability: temperatureMeasurement
+        version: 1
+        group: main
+        composite: true
+      - component: main
+        capability: thermostatHeatingSetpoint
+        version: 1
+        group: main
+        values:
+          - label: " {{heatingSetpoint.value}} {{heatingSetpoint.unit}}"
+        composite: true
+    basicPlus: []
+  detailView:
+    - component: main
+      capability: battery
+    - component: main
+      capability: temperatureMeasurement
+      version: 1
+    - component: main
+      capability: thermostatHeatingSetpoint
+      version: 1
+    - component: main
+      capability: refresh
+      version: 1
+  automation:
+    conditions:
+      - component: main
+        capability: temperatureMeasurement
+        version: 1
+      - component: main
+        capability: thermostatHeatingSetpoint
+        version: 1
+    actions:
+    - component: main
+      capability: thermostatHeatingSetpoint
+      version: 1
+preferences:
+  - name: "wakeupInterval"
+    title: "Wake Up Interval"
+    description: "Device wakeup interval"
+    required: true
+    preferenceType: number
+    definition:
+      minimum: 300
+      maximum: 86400
+      default: 3600
+    
