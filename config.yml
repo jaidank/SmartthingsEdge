@@ -1,4 +1,1 @@
-name: 'Secure SRT'
-packageKey: 'secure_srt'
-permissions:
-  zwave: {}
+
