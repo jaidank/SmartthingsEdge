@@ -1,1 +1,19 @@
-
+zwaveManufacturer:
+  - id: "Secure/srt321"
+    deviceLabel: Secure SRT321 Thermostat
+    manufacturerId: 0x0059
+    productId: 0x0003
+    productType: 0x0001
+    deviceProfileName: secure_srt
+  - id: "Secure/srt323_1"
+    deviceLabel: Secure SRT323 Thermostat 1
+    manufacturerId: 0x0059
+    productId: 0x0004
+    productType: 0x0001
+    deviceProfileName: secure_srt
+  - id: "Secure/srt323"
+    deviceLabel: Secure SRT323 Thermostat
+    manufacturerId: 0x0000
+    productId: 0x0000
+    productType: 0x0000
+    deviceProfileName: secure_srt
