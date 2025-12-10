@@ -1,1 +1,19 @@
-
+zwaveManufacturer:
+  - id: "Secure/sir321"
+    deviceLabel: Secure SIR321 Switch 1
+    manufacturerId: 0x0059
+    productId: 0x0001
+    productType: 0x0010
+    deviceProfileName: secure_sir
+  - id: "Secure/sir321_1"
+    deviceLabel: Secure SIR321 Switch 2
+    manufacturerId: 0x0059
+    productId: 0x0002
+    productType: 0x0010
+    deviceProfileName: secure_sir
+  - id: "Secure/sir321_2"
+    deviceLabel: Secure SIR321 Switch 3
+    manufacturerId: 0x0059
+    productId: 0x0003
+    productType: 0x0010
+    deviceProfileName: secure_sir

@@ -1,0 +1,4 @@
+name: 'Secure SIR'
+packageKey: 'secure_sir'
+permissions:
+  zwave: {}
