@@ -1,1 +1,7 @@
-
+zwaveManufacturer:
+  - id: "EUROtronic/stellaz"
+    deviceLabel: EUROtronic StellaZ TRV
+    manufacturerId: 0x0148
+    productId: 0x0001
+    productType: 0x0001
+    deviceProfileName: stellaz_trv

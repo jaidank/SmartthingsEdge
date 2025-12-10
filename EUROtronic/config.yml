@@ -1,0 +1,6 @@
+name: 'EUROtronic StellaZ TRV'
+packageKey: 'stellaz_trv'
+permissions:
+  zwave: {}
+description: "SmartThings driver for Z-Wave EUROtronic StellaZ TRV"
+vendorSupportInformation: "https://support.smartthings.com"
