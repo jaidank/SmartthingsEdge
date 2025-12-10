@@ -1,4 +1,0 @@
-name: 'Secure SRT Thermostat'
-packageKey: 'secure_srt_thermostat'
-permissions:
-  zwave: {}
